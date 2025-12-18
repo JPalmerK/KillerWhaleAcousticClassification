@@ -2,7 +2,12 @@
 """
 TKW Call-Type Spectrogram Panel
 No colorbar, no title, with T07/T08 brightened.
-kHz on y-axis.
+kHz on y-axis, 3x3 layout.
+
+Assumptions:
+- Exactly one example per call type, with the call type given by the first
+  three characters of the filename (e.g., 'T01_...', 'T07-...').
+- Audio files may be .wav, .aiff, or .aif.
 """
 
 import os
@@ -17,41 +22,67 @@ import librosa.display
 # ---------------------------------------------------------------------
 # 1. Settings
 # ---------------------------------------------------------------------
-data_dir = Path(r"C:\TempData\TKWCalls\birdnet02\TKW")
+data_dir = Path(r"C:\TempData\TKWCalls\birdnet02\TKW\GoodExamples")
 
-n_calltypes_to_plot = 8       # 8 panels
-segment_duration_s = 3.0      # each clip is 3 s
+n_calltypes_to_plot = 10       # 9 panels for 3x3
+segment_duration_s = 3.0      # each clip is ~3 s
 
 n_fft = 1024
-hop_length = n_fft //10       # % overlap
+hop_length = n_fft // 10      # ~90% overlap
 
-fmax_hz = 6000                # spectrogram cropped to 6 kHz
-dynamic_range_db = 65         # display top 60 dB
+fmax_hz = 8000                # spectrogram cropped to 6 kHz
+dynamic_range_db = 65         # display top 65 dB
 
 # ---------------------------------------------------------------------
-# 2. Collect one file per TKW call type (using first 3 chars)
+# 2. Collect one file per call type (first 3 chars of stem)
 # ---------------------------------------------------------------------
-wav_files = sorted(data_dir.glob("*.wav"))
+audio_files = []
+audio_files.extend(data_dir.glob("*.wav"))
+audio_files.extend(data_dir.glob("*.aiff"))
+audio_files.extend(data_dir.glob("*.aif"))
 
-if len(wav_files) == 0:
-    raise FileNotFoundError(f"No .wav files found in {data_dir}")
+audio_files = sorted(audio_files)
 
-selected_files = OrderedDict()
-for f in wav_files:
-    call_type = f.stem[:3]
-    if call_type not in selected_files:
-        selected_files[call_type] = f
-    if len(selected_files) >= n_calltypes_to_plot:
-        break
+if len(audio_files) == 0:
+    raise FileNotFoundError(f"No .wav/.aiff/.aif files found in {data_dir}")
+
+# call_type (first 3 chars) -> first file seen
+calltype_to_file = {}
+
+for f in audio_files:
+    stem = f.stem
+    if len(stem) < 3:
+        # Skip weird filenames that don't have 3 chars
+        continue
+    call_type = stem[:3]
+
+    if call_type not in calltype_to_file:
+        calltype_to_file[call_type] = f
+
+# Sort call types so T01, T02, ... etc. are in order
+sorted_items = sorted(calltype_to_file.items(), key=lambda kv: kv[0])
+
+if len(sorted_items) < n_calltypes_to_plot:
+    print(
+        f"Warning: only found {len(sorted_items)} unique call types "
+        f"from the first 3 characters. Plotting {len(sorted_items)} panels."
+    )
+
+sorted_items = sorted_items[:n_calltypes_to_plot]
+
+# Optional: print what will be plotted
+print("Call types and files used:")
+for ct, fp in sorted_items:
+    print(f"  {ct}: {fp.name}")
 
 # ---------------------------------------------------------------------
 # 3. Load, normalize, STFT, track global max magnitude
 # ---------------------------------------------------------------------
-spec_magnitudes = []
+spec_magnitudes = []  # list of (call_type, S_abs)
 sr_global = None
 global_max_mag = 0.0
 
-for call_type, path in selected_files.items():
+for call_type, path in sorted_items:
     y, sr = librosa.load(path, sr=None, mono=True)
 
     if sr_global is None:
@@ -95,10 +126,10 @@ for call_type, S_abs in spec_magnitudes:
     spec_db_list.append((call_type, S_db_crop))
 
 # ---------------------------------------------------------------------
-# 5. Plot: 4×2 grid, no colorbar/title, brighten T07/T08, y-axis in kHz, grayscale
+# 5. Plot: 3×3 grid, no colorbar/title, brighten T07/T08, y-axis in kHz
 # ---------------------------------------------------------------------
 n_rows, n_cols = 4, 2
-fig, axes = plt.subplots(n_rows, n_cols, figsize=(8, 10),
+fig, axes = plt.subplots(n_rows, n_cols, figsize=(9, 11),
                          sharex=True, sharey=True)
 axes = axes.ravel()
 
@@ -111,16 +142,15 @@ for i, (call_type, S_db_crop) in enumerate(spec_db_list):
     else:
         S_db_plot = S_db_crop
 
-    # ---- Grayscale spectrogram ----
     librosa.display.specshow(
-        S_db_plot,
+        S_db_plot + 11,   # your existing offset
         sr=sr_global,
         hop_length=hop_length,
         x_axis="time",
         y_axis="hz",
         vmin=-dynamic_range_db,
         vmax=0,
-        cmap="gray",    # <-- HERE: grayscale
+        cmap="Greys",
         ax=ax,
     )
 
@@ -131,23 +161,26 @@ for i, (call_type, S_db_crop) in enumerate(spec_db_list):
     ax.set_yticks(yticks)
     ax.set_yticklabels([f"{yt/1000:.1f}" for yt in yticks])
 
-    # Left column labels
-    if i % 2 == 0:
+    # Left column gets y-label
+    if i % n_cols == 0:
         ax.set_ylabel("kHz")
     else:
         ax.set_ylabel("")
 
-    # X labels everywhere, bottom row gets the axis label
-    if i // 2 == (n_rows - 1):
+    # Bottom row gets x-label
+    if i // n_cols == (n_rows - 1):
         ax.set_xlabel("Time (s)")
     else:
         ax.set_xlabel("")
 
     ax.set_title(call_type, fontsize=10)
 
+# Remove any unused axes if there are < 9 call types
+for j in range(len(spec_db_list), len(axes)):
+    fig.delaxes(axes[j])
+
 fig.tight_layout(rect=[0, 0, 1, 1])
 
-plt.savefig("TKW_calltype_spectrogram_panel_bw.pdf",
+plt.savefig("TKW_calltype_spectrogram_panel_3x3_bw.pdf",
             dpi=300, bbox_inches="tight")
 plt.show()
-
