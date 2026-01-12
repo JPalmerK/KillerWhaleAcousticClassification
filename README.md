@@ -1,5 +1,9 @@
-# Acoustic Classification
+# Killer Whale Acoustic Classification
+[![DOI](https://zenodo.org/badge/1102105124.svg)](https://doi.org/10.5281/zenodo.18209486)
+
 This repository contains the the metadata and outputs associated with the publication **Population-level acoustic classification of Salish Sea killer whales: integrating biologically informed call-type balancing to build robust models for conservation monitoring**. 
+
+
 
 ## 📁 Repository Structure
 
