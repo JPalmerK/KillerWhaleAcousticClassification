@@ -33,18 +33,39 @@ Pre-trained [BirdNET](https://github.com/birdnet-team/BirdNET-Analyzer) models a
 **CreateExperimentalData.R** Code to compile the [DCLDE data and annotations](https://www.nature.com/articles/s41597-025-05281-5) into structured classes for model training.
 **
 
-Exampel of loading trained tensor flow lite model and creating raven selection table
+Example of loading trained tensor flow lite model and creating raven selection table
 ```
+  # Create a prediction object pointing to tflite model, labels from BirdNET, and audio folder. Default classificaiton threshold is 0.9, change individual classes using a dictionary
     pred = BirdNetPredictorNew(
-        model_path="C:/Users/kaity/Documents/GitHub/EcotypeFinal/BirdNET Models/birdnet07/birdnet07.tflite",
-        label_path="C:/Users/kaity/Documents/GitHub/EcotypeFinal/BirdNET Models/birdnet07/birdnet07_8khz_cutoff_Labels.txt",
-        audio_folder="C:\\TempData\\TestDays\\Biggs",
-        confidence_thresh=0.9,
+        model_path=r"C:\Users\kaity\Documents\GitHub\EcotypeFinal\BirdNET Models\birdnet07\birdnet07_8khz_cutoff.tflite",
+        label_path=r"C:\Users\kaity\Documents\GitHub\EcotypeFinal\BirdNET Models\birdnet07\birdnet07_8khz_cutoff_Labels.txt",
+        audio_folder=r"E:\AdriftData\Adrift_040",
+        confidence_thresh=0.6,                 # default for all classes
+        class_thresholds={"SRKW": 0.95, 'TKW': 0.90, 'HW': 0.9},        # stricter threshold just for SRKW
+        recursive=True,
     )
-    
-    df = pred.predict_folder_global_raven(hop_s=1.5, recursive=True)
-    pred.export_to_raven(df, "C:/TempData\\malahat_global_raven.txt")
+
+    # Stream model predictions to Raven Selection Table
+    pred.predict_folder_global_raven_streaming_to_file(
+        raven_file=r"C:\TempData\Adrift_040_streaming.txt",
+        hop_s=1.5,
+        channels=1,           # int index of channel to pick (0-based). Raven Channel will be 1 (mixed/picked), indexing starts at 0
+        batch_size=16,
+        recursive=True,
+        low_hz=0,
+        high_hz=24000,
+        include_file_cols=False,
+        view="Spectrogram 1",
+    )
+
+
 ```
+## Predictor Options
+Channel selection options. Select one of the following for multi-channel data
+* "mix" (default): average all channels -> single timeline, Raven Channel=1
+* int (e.g., 0): pick one channel -> Raven Channel=1
+* list (e.g., [0,1]): average those channels -> Raven Channel=1
+* "all": run each channel separately -> Raven Channel = actual channel index + 1
 
 
 
